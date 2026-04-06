@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="id" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>SMKN 2 Sragen - Enterprise V24</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: { 
+                        brand: { 
+                            primary: '#2563eb', 
+                            secondary: '#4f46e5',
+                            accent: '#06b6d4'
+                        } 
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        :root { --sab: env(safe-area-inset-bottom, 0px); }
+        
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            -webkit-tap-highlight-color: transparent; 
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            background: #f8fafc;
+        }
+
+        .main-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: radial-gradient(circle at top right, rgba(37, 99, 235, 0.08), transparent),
+                        radial-gradient(circle at bottom left, rgba(79, 70, 229, 0.12), transparent);
+        }
+
+        .glass-card { 
+            backdrop-filter: blur(20px); 
+            background: rgba(255, 255, 255, 0.82); 
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+        }
+        .dark .glass-card { 
+            background: rgba(15, 23, 42, 0.7); 
+            border: 1px solid rgba(255, 255, 255, 0.05); 
+        }
+
+        #content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 100px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .page-content { display: none; }
+        .page-content.active { display: block; animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 0; right: 0; height: calc(80px + var(--sab));
+            background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(25px);
+            display: flex; z-index: 1000; border-top: 1px solid rgba(0,0,0,0.05);
+            padding-bottom: var(--sab);
+        }
+        .dark .bottom-nav { background: rgba(15, 23, 42, 0.96); border-top: 1px solid rgba(255,255,255,0.05); }
+        
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94a3b8; transition: 0.3s; position: relative; }
+        .nav-item.active { color: #2563eb; }
+        .nav-item.active::after { content: ''; position: absolute; top: 0; width: 24px; height: 3px; background: #2563eb; border-radius: 0 0 10px 10px; }
+        .nav-item i { font-size: 1.25rem; margin-bottom: 5px; }
+        .nav-item span { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; }
+
+        #map { height: 320px; width: 100%; border-radius: 2.5rem; border: 8px solid white; box-shadow: 0 20px 40px rgba(0,0,0,0.1); z-index: 10; position: relative; }
+        .dark #map { border-color: #1e293b; }
+
+        .avatar-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 12px; max-height: 380px; overflow-y: auto; padding: 15px;
+            background: rgba(0,0,0,0.03); border-radius: 2rem;
+        }
+        .avatar-opt { width: 100%; aspect-ratio: 1; border-radius: 18px; border: 3px solid transparent; cursor: pointer; background: white; transition: 0.2s; }
+        .avatar-opt.selected { border-color: #2563eb; transform: scale(1.08); box-shadow: 0 8px 20px rgba(37,99,235,0.2); }
+
+        .btn-premium { background: linear-gradient(135deg, #2563eb, #4f46e5); color: white; font-weight: 800; box-shadow: 0 12px 28px rgba(37,99,235,0.3); }
+        
+        .search-box { position: sticky; top: -1px; z-index: 50; padding: 10px 0; background: transparent; }
+        .log-card { border-left: 6px solid #2563eb; transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .log-card:active { transform: scale(0.97); background: rgba(0,0,0,0.02); }
+
+        .edit-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); backdrop-filter: blur(12px); z-index: 2000; display: none; align-items: flex-end; }
+        .edit-sheet { background: white; width: 100%; border-radius: 3rem 3rem 0 0; padding: 2rem; max-height: 90vh; overflow-y: auto; animation: sheetUp 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        .dark .edit-sheet { background: #0f172a; }
+        @keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        /* Splash Screen */
+        #splash-screen { position: fixed; inset: 0; background: #f8fafc; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .dark #splash-screen { background: #020617; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
+
+    <!-- SPLASH SCREEN -->
+    <div id="splash-screen">
+        <div class="w-24 h-24 btn-premium rounded-[2.5rem] flex items-center justify-center text-4xl shadow-2xl animate-pulse">
+            <i class="fa-solid fa-bolt"></i>
+        </div>
+        <h2 class="mt-8 font-black text-slate-400 text-[10px] tracking-[0.5em] uppercase">Memuat Sistem...</h2>
+    </div>
+
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="hidden min-h-screen flex items-center justify-center p-8 z-[3000] relative bg-slate-50 dark:bg-slate-950">
+        <div class="w-full max-w-md text-center">
+            <div class="w-24 h-24 btn-premium rounded-[2.5rem] flex items-center justify-center text-4xl mx-auto shadow-2xl mb-8">
+                <i class="fa-solid fa-school-flag"></i>
+            </div>
+            <h1 class="text-3xl font-black italic dark:text-white uppercase mb-2 tracking-tighter">SMKN 2 SRAGEN</h1>
+            <p class="text-[9px] text-slate-400 font-bold tracking-[0.4em] uppercase mb-10">Smart Presence App V24</p>
+            
+            <div class="glass-card p-10 rounded-[3.5rem] shadow-2xl">
+                <div class="space-y-6">
+                    <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-3 block tracking-widest">Identitas Siswa / Guru</label>
+                        <input type="text" id="login-code" placeholder="X-12075" class="w-full p-6 bg-slate-100 dark:bg-slate-900 rounded-3xl outline-none font-black text-center text-xl uppercase dark:text-white border-2 border-transparent focus:border-blue-500 transition-all placeholder:opacity-30">
+                    </div>
+                    <button onclick="handleLogin()" class="w-full btn-premium py-6 rounded-3xl shadow-xl active:scale-95 transition-all text-sm tracking-widest font-black">MASUK SISTEM</button>
+                    <p class="text-[8px] font-bold text-slate-400 uppercase">Aplikasi Absensi Mandiri SMKN 2 Sragen</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP SCREEN -->
+    <div id="app-screen" class="hidden main-container">
+        <!-- HEADER -->
+        <header class="p-6">
+            <div class="max-w-xl mx-auto glass-card rounded-[2.5rem] p-3.5 flex justify-between items-center shadow-lg">
+                <div class="flex items-center gap-4 ml-2">
+                    <img id="header-avatar" src="" class="w-12 h-12 rounded-2xl bg-white border-2 border-blue-100 shadow-inner">
+                    <div>
+                        <h1 id="top-name" class="text-[11px] font-black uppercase dark:text-white truncate max-w-[130px]">NAMA USER</h1>
+                        <p id="top-role" class="text-[8px] text-blue-600 font-black uppercase mt-1 tracking-tighter">Status: Aktif</p>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="toggleTheme()" class="w-11 h-11 rounded-2xl bg-slate-100 dark:bg-slate-800 dark:text-white flex items-center justify-center text-lg"><i id="theme-icon" class="fa-solid fa-moon"></i></button>
+                    <button onclick="logout()" class="w-11 h-11 rounded-2xl bg-red-500 text-white flex items-center justify-center text-lg"><i class="fa-solid fa-power-off"></i></button>
+                </div>
+            </div>
+        </header>
+
+        <!-- CONTENT AREA -->
+        <div id="content-area">
+            <main class="max-w-xl mx-auto px-6">
+                
+                <!-- TAB: HOME -->
+                <div id="page-home" class="page-content active space-y-8">
+                    
+                    <!-- SISWA DASHBOARD -->
+                    <div id="view-student" class="space-y-6">
+                        <div class="glass-card p-8 rounded-[3.5rem] flex items-center gap-6 shadow-sm border-b-8 border-blue-600/10">
+                            <div class="relative">
+                                <img id="main-avatar" src="" class="w-24 h-24 rounded-[2rem] object-cover bg-white shadow-xl border-4 border-white dark:border-slate-800">
+                                <div class="absolute -bottom-1 -right-1 w-8 h-8 bg-green-500 border-4 border-white dark:border-slate-800 rounded-full flex items-center justify-center text-white text-[10px]">
+                                    <i class="fa-solid fa-check"></i>
+                                </div>
+                            </div>
+                            <div>
+                                <div id="gps-status" class="inline-block px-3 py-1.5 rounded-lg bg-red-100 text-red-600 text-[9px] font-black uppercase mb-2 tracking-wider">● GPS OFFLINE</div>
+                                <h2 id="main-name" class="text-xl font-black uppercase dark:text-white leading-tight">NAMA LENGKAP</h2>
+                                <p id="main-class" class="text-[10px] text-slate-400 font-bold uppercase italic tracking-widest mt-1">KELAS</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GURU DASHBOARD -->
+                    <div id="view-teacher" class="hidden space-y-6">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="glass-card p-6 rounded-[2.5rem] border-b-4 border-blue-600">
+                                <p class="text-[9px] font-black text-slate-400 uppercase">Hadir</p>
+                                <h4 class="text-3xl font-black dark:text-white mt-1">156 <span class="text-xs opacity-20">/ 612</span></h4>
+                            </div>
+                            <div class="glass-card p-6 rounded-[2.5rem] border-b-4 border-emerald-500">
+                                <p class="text-[9px] font-black text-slate-400 uppercase">Tepat Waktu</p>
+                                <h4 class="text-3xl font-black dark:text-white mt-1">94%</h4>
+                            </div>
+                        </div>
+
+                        <div class="glass-card p-8 rounded-[3rem] space-y-6">
+                            <div class="search-box">
+                                <div class="relative">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                    <input type="text" id="teacher-search" onkeyup="filterTeacherLogs()" placeholder="Cari Nama Siswa..." class="w-full p-5 pl-14 bg-slate-100 dark:bg-slate-900/50 rounded-2xl outline-none font-bold text-sm uppercase dark:text-white border-2 border-transparent focus:border-blue-500 transition-all">
+                                </div>
+                            </div>
+                            
+                            <div id="teacher-logs-container" class="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scroll">
+                                <!-- Log items via JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MAP (SHARED) -->
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center px-4">
+                            <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Radar Lokasi</h3>
+                            <div id="live-clock" class="text-[11px] font-black dark:text-white tabular-nums bg-blue-600/10 px-3 py-1 rounded-full text-blue-600">00:00:00</div>
+                        </div>
+                        <div id="map">
+                            <button onclick="recenterMap()" class="absolute bottom-6 right-6 z-[999] w-14 h-14 bg-white rounded-2xl shadow-2xl text-blue-600 flex items-center justify-center text-2xl active:scale-90 transition-all border-2 border-blue-50">
+                                <i class="fa-solid fa-crosshairs"></i>
+                            </button>
+                        </div>
+                        <div class="glass-card p-6 rounded-[2.5rem] border-l-[12px] border-blue-600 shadow-sm flex items-center gap-4">
+                            <div class="w-10 h-10 bg-blue-50 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600">
+                                <i class="fa-solid fa-location-dot"></i>
+                            </div>
+                            <p id="info-status" class="text-[11px] font-black uppercase dark:text-white italic leading-tight">Mencari sinyal satelit...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: HISTORY -->
+                <div id="page-history" class="page-content space-y-6">
+                    <h2 class="text-2xl font-black uppercase italic dark:text-white tracking-tighter">History Absen</h2>
+                    <div class="glass-card p-10 rounded-[3.5rem] text-center space-y-4">
+                        <div class="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto text-slate-300 text-3xl">
+                            <i class="fa-solid fa-calendar-check"></i>
+                        </div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Belum ada catatan hari ini</p>
+                    </div>
+                </div>
+
+                <!-- TAB: SCHOOL -->
+                <div id="page-school" class="page-content space-y-6">
+                    <h2 class="text-2xl font-black uppercase italic dark:text-white tracking-tighter text-center">Info Sekolah</h2>
+                    <div class="glass-card p-8 rounded-[3.5rem] space-y-6 overflow-hidden">
+                        <div class="w-full h-48 bg-slate-200 dark:bg-slate-800 rounded-[2.5rem] overflow-hidden relative">
+                            <img src="https://images.unsplash.com/photo-1541339907198-e08756ebafe3?q=80&w=800&auto=format&fit=crop" class="w-full h-full object-cover">
+                            <div class="absolute inset-0 bg-gradient-to-t from-blue-900/80 to-transparent flex items-end p-6">
+                                <div>
+                                    <h3 class="text-white font-black text-xl">SMKN 2 SRAGEN</h3>
+                                    <p class="text-blue-200 text-[9px] font-bold uppercase tracking-widest">Unggul - Mandiri - Terampil</p>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 leading-relaxed uppercase">Sekolah Pusat Keunggulan dengan fokus pada pengembangan karakter disiplin dan penguasaan teknologi industri modern.</p>
+                    </div>
+                </div>
+
+                <!-- TAB: PROFILE -->
+                <div id="page-profile" class="page-content space-y-6">
+                    <h2 class="text-2xl font-black uppercase italic dark:text-white tracking-tighter text-center">Profil Saya</h2>
+                    <div class="glass-card p-10 rounded-[4rem] text-center shadow-xl border-t-8 border-blue-600">
+                        <img id="profile-avatar" src="" class="w-36 h-36 rounded-[3rem] mx-auto mb-6 shadow-2xl border-8 border-white dark:border-slate-800 bg-white">
+                        <h2 id="profile-name" class="text-2xl font-black dark:text-white uppercase mb-1">NAMA LENGKAP</h2>
+                        <p id="profile-bio" class="text-[10px] text-blue-600 font-black uppercase italic tracking-[0.2em] mb-10">BIO STATUS</p>
+                        
+                        <div class="grid grid-cols-1 gap-3 pt-8 border-t dark:border-slate-800">
+                            <button id="btn-edit-char" onclick="toggleEditSheet(true)" class="w-full py-6 btn-premium rounded-[2rem] text-[11px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
+                                <i class="fa-solid fa-palette"></i> Pilih Karakter (100+)
+                            </button>
+                            <button onclick="logout()" class="w-full py-6 bg-slate-100 dark:bg-slate-800 dark:text-slate-400 rounded-[2rem] text-[11px] font-black uppercase active:scale-95 transition-all">
+                                <i class="fa-solid fa-arrow-right-from-bracket mr-2"></i> Keluar Aplikasi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+
+        <!-- NAVIGATION -->
+        <nav class="bottom-nav">
+            <div id="nav-home" class="nav-item active" onclick="switchTab('home', this)"><i class="fa-solid fa-house-user"></i><span>Home</span></div>
+            <div id="nav-history" class="nav-item" onclick="switchTab('history', this)"><i class="fa-solid fa-clipboard-list"></i><span>History</span></div>
+            <div id="nav-school" class="nav-item" onclick="switchTab('school', this)"><i class="fa-solid fa-school"></i><span>School</span></div>
+            <div id="nav-profile" class="nav-item" onclick="switchTab('profile', this)"><i class="fa-solid fa-id-card"></i><span>Profile</span></div>
+        </nav>
+    </div>
+
+    <!-- AVATAR EDIT SHEET -->
+    <div id="edit-overlay" class="edit-overlay" onclick="toggleEditSheet(false)">
+        <div class="edit-sheet" onclick="event.stopPropagation()">
+            <div class="w-12 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full mx-auto mb-8"></div>
+            <h3 class="text-2xl font-black uppercase dark:text-white mb-6 italic tracking-tight">Kustom Karakter</h3>
+            
+            <div id="avatar-container" class="avatar-grid mb-8">
+                <!-- Avatars generated via JS -->
+            </div>
+            
+            <div class="space-y-4">
+                <div class="space-y-1">
+                    <label class="text-[9px] font-black text-slate-400 uppercase ml-2">Nama Panggilan</label>
+                    <input type="text" id="edit-name" class="w-full p-5 bg-slate-100 dark:bg-slate-900 rounded-2xl font-bold uppercase dark:text-white outline-none border-2 border-transparent focus:border-blue-500 transition-all">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[9px] font-black text-slate-400 uppercase ml-2">Bio Status</label>
+                    <input type="text" id="edit-bio" class="w-full p-5 bg-slate-100 dark:bg-slate-900 rounded-2xl font-bold uppercase dark:text-white outline-none border-2 border-transparent focus:border-blue-500 transition-all">
+                </div>
+                <button onclick="saveProfile()" class="w-full py-6 btn-premium rounded-3xl shadow-xl uppercase font-black text-sm mt-4 active:scale-95 transition-all tracking-widest">Simpan Perubahan</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Database Siswa (Sample based on range 12075-12710)
+        const STUDENT_DB = {
+            "X-12075": { n: "ADINDA DEVI APRIDA", k: "X TKP 1" },
+            "X-12076": { n: "BAGAS WICAKSONO", k: "X TKP 1" },
+            "X-12698": { n: "NAUFAL RUSYDA", k: "X TKJ 2" },
+            "X-12710": { n: "ZULFA NUR AZIZAH", k: "X TKJ 3" }
+        };
+
+        const ALL_STUDENTS = [
+            { id: "X-12075", n: "ADINDA DEVI APRIDA", t: "07:05", s: "HADIR" },
+            { id: "X-12076", n: "BAGAS WICAKSONO", t: "07:12", s: "HADIR" },
+            { id: "X-12080", n: "DIMAS ARDIANTO", t: "07:15", s: "HADIR" },
+            { id: "X-12100", n: "ANDIKA PRATAMA", t: "06:55", s: "HADIR" },
+            { id: "X-12698", n: "NAUFAL RUSYDA", t: "07:20", s: "HADIR" },
+            { id: "X-12710", n: "ZULFA NUR AZIZAH", t: "07:02", s: "HADIR" }
+        ];
+
+        let currentUser = { role: 'siswa', id: '', name: '', class: '', avatar: 'char-v24-1', bio: 'SMKN 2 SRAGEN' };
+        let map, marker, userPos = null;
+
+        // CHECK PERSISTENT SESSION ON LOAD
+        window.onload = function() {
+            setTimeout(() => {
+                const savedUser = localStorage.getItem('smkn2_user_session');
+                if(savedUser) {
+                    currentUser = JSON.parse(savedUser);
+                    startApp(false); // Direct start without re-saving
+                } else {
+                    document.getElementById('splash-screen').style.display = 'none';
+                    document.getElementById('login-screen').classList.remove('hidden');
+                }
+            }, 1500);
+        };
+
+        function handleLogin() {
+            const input = document.getElementById('login-code').value.toUpperCase().trim();
+            
+            if(input === 'GURU-SMKN2') {
+                currentUser.role = 'guru';
+                currentUser.name = 'PENGAWAS ADMINISTRATOR';
+                currentUser.class = 'STAF PENGAJAR';
+                startApp(true);
+            } else if(STUDENT_DB[input]) {
+                currentUser.role = 'siswa';
+                currentUser.id = input;
+                currentUser.name = STUDENT_DB[input].n;
+                currentUser.class = STUDENT_DB[input].k;
+                startApp(true);
+            } else {
+                const num = parseInt(input.replace('X-', ''));
+                if(num >= 12075 && num <= 12710) {
+                    currentUser.role = 'siswa';
+                    currentUser.id = input;
+                    currentUser.name = "SISWA NO " + input;
+                    currentUser.class = "KELAS X SMKN 2";
+                    startApp(true);
+                } else {
+                    alert("KODE AKSES TIDAK TERDAFTAR!");
+                }
+            }
+        }
+
+        function startApp(shouldSave) {
+            if(shouldSave) localStorage.setItem('smkn2_user_session', JSON.stringify(currentUser));
+            
+            document.getElementById('splash-screen').style.display = 'none';
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('app-screen').classList.remove('hidden');
+            
+            if(currentUser.role === 'guru') {
+                document.getElementById('view-student').classList.add('hidden');
+                document.getElementById('view-teacher').classList.remove('hidden');
+                document.getElementById('btn-edit-char').classList.add('hidden');
+                document.getElementById('top-role').innerText = 'Dashboard Guru';
+                renderTeacherLogs(ALL_STUDENTS);
+            }
+
+            generate100Avatars();
+            updateUIVisuals();
+            initMap();
+            
+            // Start Clock
+            setInterval(() => {
+                const timeStr = new Date().toLocaleTimeString('id-ID', { hour12: false });
+                const clock = document.getElementById('live-clock');
+                if(clock) clock.innerText = timeStr;
+            }, 1000);
+        }
+
+        function logout() {
+            localStorage.removeItem('smkn2_user_session');
+            location.reload();
+        }
+
+        function generate100Avatars() {
+            const container = document.getElementById('avatar-container');
+            if(!container) return;
+            container.innerHTML = '';
+            for(let i=1; i<=100; i++) {
+                const seed = "char-v24-" + i;
+                const img = document.createElement('img');
+                img.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
+                img.className = "avatar-opt " + (currentUser.avatar === seed ? "selected" : "");
+                img.onclick = () => {
+                    document.querySelectorAll('.avatar-opt').forEach(o => o.classList.remove('selected'));
+                    img.classList.add('selected');
+                    currentUser.avatar = seed;
+                };
+                container.appendChild(img);
+            }
+        }
+
+        function updateUIVisuals() {
+            const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.avatar}`;
+            document.getElementById('header-avatar').src = avatarUrl;
+            document.getElementById('main-avatar').src = avatarUrl;
+            document.getElementById('profile-avatar').src = avatarUrl;
+            
+            document.getElementById('top-name').innerText = currentUser.name;
+            document.getElementById('main-name').innerText = currentUser.name;
+            document.getElementById('main-class').innerText = currentUser.class;
+            document.getElementById('profile-name').innerText = currentUser.name;
+            document.getElementById('profile-bio').innerText = currentUser.bio;
+        }
+
+        function switchTab(id, el) {
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            el.classList.add('active');
+            document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+            document.getElementById(`page-${id}`).classList.add('active');
+            document.getElementById('content-area').scrollTo(0,0);
+            if(id === 'home' && map) setTimeout(() => map.invalidateSize(), 300);
+        }
+
+        function toggleEditSheet(show) {
+            document.getElementById('edit-overlay').style.display = show ? 'flex' : 'none';
+            if(show) {
+                document.getElementById('edit-name').value = currentUser.name;
+                document.getElementById('edit-bio').value = currentUser.bio;
+            }
+        }
+
+        function saveProfile() {
+            const n = document.getElementById('edit-name').value.toUpperCase().trim();
+            const b = document.getElementById('edit-bio').value.toUpperCase().trim();
+            if(n) currentUser.name = n;
+            if(b) currentUser.bio = b;
+            localStorage.setItem('smkn2_user_session', JSON.stringify(currentUser));
+            updateUIVisuals();
+            toggleEditSheet(false);
+        }
+
+        function renderTeacherLogs(data) {
+            const container = document.getElementById('teacher-logs-container');
+            if(!container) return;
+            container.innerHTML = data.map(item => `
+                <div class="log-card glass-card p-5 rounded-2xl flex justify-between items-center ${item.s === 'HADIR' ? 'border-l-blue-500' : 'border-l-orange-500'}">
+                    <div>
+                        <p class="text-[10px] font-black dark:text-white uppercase tracking-tight">${item.n}</p>
+                        <p class="text-[8px] text-slate-400 font-bold mt-1 uppercase">${item.id} • ${item.t} WIB</p>
+                    </div>
+                    <span class="text-[8px] font-black px-3 py-1.5 rounded-lg ${item.s === 'HADIR' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}">${item.s}</span>
+                </div>
+            `).join('');
+        }
+
+        function filterTeacherLogs() {
+            const query = document.getElementById('teacher-search').value.toUpperCase();
+            const filtered = ALL_STUDENTS.filter(s => s.n.includes(query) || s.id.includes(query));
+            renderTeacherLogs(filtered);
+        }
+
+        function initMap() {
+            if(map) return;
+            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([-7.4257, 111.0087], 17);
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}').addTo(map);
+            
+            L.polygon([[-7.424593, 111.008093], [-7.424446, 111.009040], [-7.426817, 111.009361], [-7.426940, 111.008423]], { 
+                color: '#2563eb', weight: 2, fillOpacity: 0.15 
+            }).addTo(map);
+
+            if(navigator.geolocation) {
+                navigator.geolocation.watchPosition(pos => {
+                    userPos = [pos.coords.latitude, pos.coords.longitude];
+                    const dist = map.distance(userPos, [-7.4257, 111.0087]);
+                    const badge = document.getElementById('gps-status');
+                    const info = document.getElementById('info-status');
+
+                    if(dist < 200) {
+                        badge.innerText = "● AREA SEKOLAH";
+                        badge.className = "inline-block px-3 py-1.5 rounded-lg bg-green-100 text-green-600 text-[9px] font-black uppercase mb-2";
+                        info.innerText = "RADIU VALID: TERKUNCI PADA KOORDINAT SEKOLAH.";
+                    } else {
+                        badge.innerText = "● LUAR RADIUS";
+                        badge.className = "inline-block px-3 py-1.5 rounded-lg bg-orange-100 text-orange-600 text-[9px] font-black uppercase mb-2";
+                        info.innerText = "JARAK: " + Math.round(dist) + "M DARI TITIK PRESENSI.";
+                    }
+
+                    const dot = L.divIcon({ html: `<div class="w-6 h-6 bg-blue-600 border-4 border-white rounded-full shadow-2xl scale-110"></div>`, className: '' });
+                    if(!marker) marker = L.marker(userPos, { icon: dot }).addTo(map);
+                    else marker.setLatLng(userPos);
+                }, null, { enableHighAccuracy: true });
+            }
+        }
+
+        function recenterMap() { if(userPos) map.flyTo(userPos, 18); }
+        
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            document.getElementById('theme-icon').className = document.documentElement.classList.contains('dark') ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        }
+    </script>
+</body>
+</html>
+
