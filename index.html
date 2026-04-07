@@ -417,17 +417,24 @@
         }
 
         window.onload = function() {
-            setTimeout(() => {
-                const savedUser = localStorage.getItem('smkn2_live_session');
-                if(savedUser) {
-                    window.currentUser = JSON.parse(savedUser);
-                    startApp(false);
-                } else {
-                    document.getElementById('splash-screen').style.display = 'none';
-                    document.getElementById('login-screen').classList.remove('hidden');
-                }
-            }, 1500);
-        };
+    try {
+        setTimeout(() => {
+            const savedUser = localStorage.getItem('smkn2_live_session');
+            document.getElementById('splash-screen').style.display = 'none';
+
+            if(savedUser) {
+                window.currentUser = JSON.parse(savedUser);
+                startApp(false);
+            } else {
+                document.getElementById('login-screen').classList.remove('hidden');
+            }
+        }, 1500);
+    } catch(e) {
+        document.getElementById('splash-screen').style.display = 'none';
+        document.getElementById('login-screen').classList.remove('hidden');
+        console.log(e);
+    }
+}
 
         window.logout = function() {
             localStorage.removeItem('smkn2_live_session');
