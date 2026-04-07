@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="id" class="light">
 <head>
     <meta charset="UTF-8">
@@ -202,7 +202,7 @@
                 <!-- TAB: HISTORY -->
                 <div id="page-history" class="page-content space-y-4">
                     <h2 class="text-xl font-black uppercase italic dark:text-white">Log Aktivitas</h2>
-                    <div class="glass-card p-6 rounded-[2rem] text-center text-slate-400 py-20 uppercase font-black text-xs">Belum ada data</div>
+                    <div id="history-list" class="glass-card p-6 rounded-[2rem] text-center text-slate-400 py-20 uppercase font-black text-xs">Belum ada data</div>
                 </div>
 
                 <!-- TAB: SCHOOL -->
@@ -232,6 +232,8 @@
 
             </main>
         </div>
+
+        <button id="btn-edit-trigger" onclick="toggleEditSheet(true)" class="hidden"></button>
 
         <!-- Navigation Bar -->
         <nav class="bottom-nav">
@@ -395,12 +397,14 @@
             if(window.currentUser.role === 'guru') {
                 document.getElementById('view-student').classList.add('hidden');
                 document.getElementById('view-teacher').classList.remove('hidden');
-                document.getElementById('btn-edit-trigger').classList.add('hidden');
+                const editBtn = document.getElementById('btn-edit-trigger'); if(editBtn) editBtn.classList.add('hidden');
                 document.getElementById('top-role').innerText = 'Dashboard Admin';
             }
 
             generate100Avatars();
             updateUIVisuals();
+            renderHistory();
+            addHistoryLog('Login: ' + window.currentUser.name);
             initMap();
             initCloud(); // Connect to server
             
@@ -491,7 +495,29 @@
             window.toggleEditSheet(false);
         }
 
-        function initMap() {
+        
+        function addHistoryLog(text) {
+            const box = document.getElementById('history-list');
+            if(!box) return;
+            const logs = JSON.parse(localStorage.getItem('smkn2_logs') || '[]');
+            logs.unshift({text, time:new Date().toLocaleString('id-ID')});
+            localStorage.setItem('smkn2_logs', JSON.stringify(logs.slice(0,20)));
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const box = document.getElementById('history-list');
+            if(!box) return;
+            const logs = JSON.parse(localStorage.getItem('smkn2_logs') || '[]');
+            if(!logs.length) {
+                box.innerHTML = 'Belum ada data';
+                return;
+            }
+            box.className = 'space-y-3';
+            box.innerHTML = logs.map(l => `<div class="glass-card p-4 rounded-2xl text-left"><div class="text-xs font-black dark:text-white">${l.text}</div><div class="text-[10px] text-slate-400">${l.time}</div></div>`).join('');
+        }
+
+function initMap() {
             if(window.map) return;
             window.map = L.map('map', { zoomControl: false, attributionControl: false }).setView([-7.4257, 111.0087], 17);
             L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}').addTo(window.map);
@@ -541,5 +567,8 @@
     </script>
 </body>
 </html>
+
+
+                                                   
 
 
