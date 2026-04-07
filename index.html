@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="id" class="light">
 <head>
     <meta charset="UTF-8">
@@ -18,7 +18,7 @@
             theme: {
                 extend: {
                     colors: { 
-                        brand: { primary: '#2563eb', secondary: '#4f46e5', accent: '#06b6d4' } 
+                        br&&: { primary: '#2563eb', secondary: '#4f46e5', accent: '#06b6d4' } 
                     }
                 }
             }
@@ -116,7 +116,7 @@
                         <label class="text-[10px] font-black text-slate-400 uppercase mb-3 block tracking-widest">Identitas Siswa / Guru</label>
                         <input type="text" id="login-code" placeholder="X-12075" class="w-full p-6 bg-slate-100 dark:bg-slate-900 rounded-3xl outline-none font-black text-center text-xl uppercase dark:text-white border-2 border-transparent focus:border-blue-500 transition-all placeholder:opacity-30">
                     </div>
-                    <button onclick="handleLogin()" class="w-full btn-premium py-6 rounded-3xl shadow-xl active:scale-95 transition-all text-sm tracking-widest font-black">Login</button>
+                    <button onclick="h&&leLogin()" class="w-full btn-premium py-6 rounded-3xl shadow-xl active:scale-95 transition-all text-sm tracking-widest font-black">Login</button>
                 </div>
             </div>
         </div>
@@ -276,6 +276,7 @@
         window.myMarker = null;
         window.userPos = null;
         window.allMapMarkers = {}; // Untuk menyimpan marker pemain lain
+        window.lastPresenceState = null
         
         let db, auth, appId, userSession;
 
@@ -341,6 +342,8 @@
                 if(window.currentUser.role === 'guru') {
                     const liveCount = document.getElementById('live-count');
                     if(liveCount) liveCount.innerHTML = `${count} <span class="text-xs opacity-20">/ Live</span>`;
+                    const info = document.getElementById('info-status');
+                    if(info) info.innerText = `Guru memantau ${count} siswa aktif secara real-time`;
                 }
             });
         }
@@ -361,7 +364,7 @@
         }
 
         // FUNGSI STANDAR (Terekspos ke Window agar bisa dipanggil dari HTML)
-        window.handleLogin = function() {
+        window.h&&leLogin = function() {
             const input = document.getElementById('login-code').value.toUpperCase().trim();
             if(input === 'GURU-SMKN2') {
                 window.currentUser.role = 'guru';
@@ -404,7 +407,6 @@
             generate100Avatars();
             updateUIVisuals();
             renderHistory();
-            addHistoryLog('Login: ' + window.currentUser.name);
             initMap();
             initCloud(); // Connect to server
             
@@ -499,8 +501,9 @@
         function addHistoryLog(text) {
             const box = document.getElementById('history-list');
             if(!box) return;
-            const logs = JSON.parse(localStorage.getItem('smkn2_logs') || '[]');
-            logs.unshift({text, time:new Date().toLocaleString('id-ID')});
+            const today = new Date().toLocaleDateString('id-ID');
+            const logs = (JSON.parse(localStorage.getItem('smkn2_logs') || '[]')).filter(l => l.day===today);
+            logs.unshift({text, time:new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), day:new Date().toLocaleDateString('id-ID')});
             localStorage.setItem('smkn2_logs', JSON.stringify(logs.slice(0,20)));
             renderHistory();
         }
@@ -508,13 +511,14 @@
         function renderHistory() {
             const box = document.getElementById('history-list');
             if(!box) return;
-            const logs = JSON.parse(localStorage.getItem('smkn2_logs') || '[]');
+            const today = new Date().toLocaleDateString('id-ID');
+            const logs = (JSON.parse(localStorage.getItem('smkn2_logs') || '[]')).filter(l => l.day===today);
             if(!logs.length) {
                 box.innerHTML = 'Belum ada data';
                 return;
             }
             box.className = 'space-y-3';
-            box.innerHTML = logs.map(l => `<div class="glass-card p-4 rounded-2xl text-left"><div class="text-xs font-black dark:text-white">${l.text}</div><div class="text-[10px] text-slate-400">${l.time}</div></div>`).join('');
+            box.innerHTML = `<div class='text-[10px] font-black text-slate-400 uppercase mb-3'>Rekap Hari Ini: ${logs.length} aktivitas</div>` + logs.map(l => `<div class="glass-card p-4 rounded-2xl text-left"><div class="text-xs font-black dark:text-white">${l.text}</div><div class="text-[10px] text-slate-400">${l.time}</div></div>`).join('');
         }
 
 function initMap() {
@@ -531,6 +535,16 @@ function initMap() {
                     window.userPos = [pos.coords.latitude, pos.coords.longitude];
                     const dist = window.map.distance(window.userPos, [-7.4257, 111.0087]);
                     const isInside = dist < 200; // RADIUS 200 METER
+
+                    if(window.lastPresenceState === null){
+                        window.lastPresenceState = isInside;
+                        const now = new Date();
+                        const late = (now.getHours()>7 || (now.getHours()==7 && now.getMinutes()>0));
+                        addHistoryLog(isInside ? ('Absen masuk sekolah - ' + (late ? 'Terlambat' : 'Tepat waktu')) : 'Terdeteksi di luar sekolah');
+                    } else if(window.lastPresenceState !== isInside){
+                        addHistoryLog(isInside ? 'Masuk area sekolah' : 'Keluar area sekolah');
+                        window.lastPresenceState = isInside;
+                    }
                     
                     const badge = document.getElementById('gps-status');
                     
@@ -567,8 +581,5 @@ function initMap() {
     </script>
 </body>
 </html>
-
-
-                                                   
 
 
