@@ -323,7 +323,7 @@
       <div class="w-full max-w-md text-center">
         <div class="w-28 h-28 mx-auto mb-8">
           <img
-            src="https://i.ibb.co.com/p6Rcs2qw/Whats-App-Image-2026-04-20-at-11-27-26.jpg""
+            src="https://i.ibb.co.com/p6Rcs2qw/Whats-App-Image-2026-04-20-at-11-27-26.jpg"
             alt="Logo Aplikasi Sekolah"
             class="w-full h-full object-contain rounded-[2.5rem] shadow-2xl"
           />
@@ -1094,19 +1094,100 @@
         return (value || "").toLowerCase().replace(/\s+/g, " ").trim();
       }
 
+      function getAdminAccount() {
+        return (
+          window.ADMIN_ACCOUNT || {
+            username: "admin",
+            password: "smkn2guru",
+            name: "PENGAWAS ADMIN",
+            class: "STAF PENGAJAR",
+            jurusan: "ADMIN",
+            absenNo: "-",
+            bio: "DASHBOARD MONITORING SMKN 2 SRAGEN",
+            avatar: "char-live-admin",
+          }
+        );
+      }
+
+      function buildLocalCatalog() {
+        const classesByJurusan = {};
+        Object.values(window.STUDENT_DB || {}).forEach((student) => {
+          const jurusan = student.jurusan || "LAINNYA";
+          const className = student.class || "BELUM DIATUR";
+          if (!classesByJurusan[jurusan]) {
+            classesByJurusan[jurusan] = [];
+          }
+          if (!classesByJurusan[jurusan].includes(className)) {
+            classesByJurusan[jurusan].push(className);
+          }
+        });
+
+        Object.keys(classesByJurusan).forEach((jurusan) => {
+          classesByJurusan[jurusan].sort();
+        });
+
+        return {
+          jurusan: Object.keys(classesByJurusan).sort(),
+          classesByJurusan,
+        };
+      }
+
+      function attemptLocalLogin(username, password) {
+        const admin = getAdminAccount();
+        if (
+          username === normalizeUsername(admin.username) &&
+          password === String(admin.password || "").trim()
+        ) {
+          return {
+            success: true,
+            user: {
+              ...buildAdminUser(),
+              sessionMode: "local",
+            },
+            mode: "local",
+          };
+        }
+
+        const record = window.STUDENT_DB?.[username];
+        if (!record) {
+          return {
+            success: false,
+            message: "Username atau password tidak valid.",
+          };
+        }
+
+        if (String(record.password || "").trim() !== password) {
+          return {
+            success: false,
+            message: "Username atau password tidak valid.",
+          };
+        }
+
+        return {
+          success: true,
+          user: {
+            ...buildStudentUser(username, record),
+            sessionMode: "local",
+          },
+          mode: "local",
+        };
+      }
+
       function buildAdminUser() {
+        const admin = getAdminAccount();
         return {
           role: "guru",
           id: "GURU-01",
-          username: window.ADMIN_ACCOUNT.username,
-          name: window.ADMIN_ACCOUNT.name,
-          class: window.ADMIN_ACCOUNT.class,
-          jurusan: window.ADMIN_ACCOUNT.jurusan || "ADMIN",
-          absenNo: window.ADMIN_ACCOUNT.absenNo || "-",
-          avatar: window.ADMIN_ACCOUNT.avatar,
+          username: admin.username,
+          name: admin.name,
+          class: admin.class,
+          jurusan: admin.jurusan || "ADMIN",
+          absenNo: admin.absenNo || "-",
+          avatar: admin.avatar,
           photo: "",
           lastAttendancePhoto: "",
-          bio: window.ADMIN_ACCOUNT.bio,
+          bio: admin.bio,
+          sessionMode: "local",
         };
       }
 
@@ -1192,46 +1273,6 @@
         updateAdminFilterSummary();
       }
 
-      function loadStudentCatalogFromLocal() {
-        const students = Object.values(window.STUDENT_DB || {});
-        const jurusan = [...new Set(students.map((student) => student.jurusan).filter(Boolean))].sort();
-        const classesByJurusan = {};
-        jurusan.forEach((jur) => {
-          classesByJurusan[jur] = [...new Set(
-            students
-              .filter((student) => student.jurusan === jur)
-              .map((student) => student.class)
-              .filter(Boolean),
-          )].sort();
-        });
-        window.studentCatalog = { jurusan, classesByJurusan };
-      }
-
-      function tryLocalLogin(username, password) {
-        const adminUsername =
-          typeof window.ADMIN_ACCOUNT !== "undefined"
-            ? normalizeUsername(window.ADMIN_ACCOUNT.username)
-            : "admin";
-        const adminPassword =
-          typeof window.ADMIN_ACCOUNT !== "undefined"
-            ? window.ADMIN_ACCOUNT.password
-            : "smkn2guru";
-
-        if (username === adminUsername && password === adminPassword) {
-          window.currentUser = buildAdminUser();
-          loadStudentCatalogFromLocal();
-          return true;
-        }
-
-        const student = window.STUDENT_DB?.[username];
-        if (student && student.password === password) {
-          window.currentUser = buildStudentUser(username, student);
-          return true;
-        }
-
-        return false;
-      }
-
       async function loadStudentCatalog() {
         try {
           const response = await fetch("./api/catalog.php", {
@@ -1247,7 +1288,7 @@
           renderAdminFilters();
         } catch (error) {
           console.error(error);
-          loadStudentCatalogFromLocal();
+          window.studentCatalog = buildLocalCatalog();
           renderAdminFilters();
         }
       }
@@ -1384,6 +1425,8 @@
           avatar: savedUser.avatar || "char-live-1",
           photo: savedUser.photo || "",
           lastAttendancePhoto: savedUser.lastAttendancePhoto || "",
+          sessionToken: savedUser.sessionToken || "",
+          sessionMode: savedUser.sessionMode || (savedUser.sessionToken ? "server" : "local"),
           bio: savedUser.bio || "PESERTA UTS SMKN 2 SRAGEN",
         };
       }
@@ -1399,6 +1442,7 @@
           return;
         }
 
+        let serverErrorMessage = "";
         try {
           const response = await fetch("./api/login.php", {
             method: "POST",
@@ -1407,27 +1451,42 @@
           });
 
           const result = await response.json();
-          if (!response.ok || !result.success) {
-            showNotification(result.message || "Username atau password tidak valid", "error");
-            return;
-          }
-
-          window.currentUser = {
-            ...window.currentUser,
-            ...result.user,
-            photo: result.user.photo || "",
-            lastAttendancePhoto: result.user.lastAttendancePhoto || "",
-          };
-          startApp(true);
-        } catch (error) {
-          console.error(error);
-          if (tryLocalLogin(username, password)) {
-            showNotification("Masuk dengan mode offline lokal", "success");
+          if (response.ok && result.success) {
+            window.currentUser = {
+              ...window.currentUser,
+              ...result.user,
+              photo: result.user.photo || "",
+              lastAttendancePhoto: result.user.lastAttendancePhoto || "",
+              sessionMode: "server",
+            };
             startApp(true);
             return;
           }
-          showNotification("Username atau password tidak valid", "error");
+          serverErrorMessage = result.message || "";
+        } catch (error) {
+          console.error(error);
         }
+
+        const localLogin = attemptLocalLogin(username, password);
+        if (localLogin.success) {
+          window.currentUser = {
+            ...window.currentUser,
+            ...localLogin.user,
+          };
+          startApp(true);
+          showNotification(
+            serverErrorMessage
+              ? "Masuk dengan database lokal karena server belum aktif"
+              : "Masuk dengan database lokal",
+            "info",
+          );
+          return;
+        }
+
+        showNotification(
+          serverErrorMessage || "Login gagal. Username atau password tidak cocok.",
+          "error",
+        );
       };
 
       function startApp(shouldSave) {
@@ -1475,8 +1534,50 @@
         setTimeout(() => {
           const savedUser = localStorage.getItem("smkn2_live_session");
           if (savedUser) {
-            window.currentUser = normalizeSavedUser(JSON.parse(savedUser));
-            startApp(false);
+            const normalizedUser = normalizeSavedUser(JSON.parse(savedUser));
+            if (normalizedUser.role === "guru") {
+              window.currentUser = normalizedUser;
+              startApp(false);
+              return;
+            }
+
+            if (normalizedUser.sessionMode !== "server" || !normalizedUser.sessionToken) {
+              window.currentUser = normalizedUser;
+              startApp(false);
+              return;
+            }
+
+            fetch(
+              `./api/session.php?studentId=${encodeURIComponent(normalizedUser.id)}&sessionToken=${encodeURIComponent(normalizedUser.sessionToken || "")}&role=${encodeURIComponent(normalizedUser.role)}`,
+              { headers: { Accept: "application/json" } },
+            )
+              .then((response) => response.json().then((body) => ({ ok: response.ok, body })))
+              .then(({ ok, body }) => {
+                if (!ok || !body.success) {
+                  localStorage.removeItem("smkn2_live_session");
+                  document.getElementById("splash-screen").style.display = "none";
+                  document.getElementById("login-screen").classList.remove("hidden");
+                  showNotification("Sesi akun sudah dipakai di perangkat lain", "error");
+                  return;
+                }
+                window.currentUser = {
+                  ...normalizedUser,
+                  ...body.user,
+                  photo: normalizedUser.photo || body.user.photo || "",
+                  lastAttendancePhoto:
+                    normalizedUser.lastAttendancePhoto || body.user.lastAttendancePhoto || "",
+                  sessionToken: body.user.sessionToken || normalizedUser.sessionToken || "",
+                };
+                startApp(false);
+              })
+              .catch(() => {
+                window.currentUser = {
+                  ...normalizedUser,
+                  sessionMode: "local",
+                };
+                startApp(false);
+                showNotification("Server tidak terjangkau, sesi lokal dipakai", "info");
+              });
           } else {
             document.getElementById("splash-screen").style.display = "none";
             document.getElementById("login-screen").classList.remove("hidden");
@@ -1530,7 +1631,26 @@
       };
 
       window.logout = function () {
+        const currentSession = {
+          studentId: window.currentUser.id || "",
+          sessionToken: window.currentUser.sessionToken || "",
+          role: window.currentUser.role || "",
+        };
         localStorage.removeItem("smkn2_live_session");
+
+        if (
+          currentSession.role === "siswa" &&
+          currentSession.sessionMode === "server" &&
+          currentSession.sessionToken
+        ) {
+          fetch("./api/logout.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify(currentSession),
+          }).finally(() => location.reload());
+          return;
+        }
+
         location.reload();
       };
 
