@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="./student-db.js"></script>
 
     <script>
         tailwind.config = {
@@ -119,16 +120,24 @@
             <div class="w-24 h-24 btn-premium rounded-[2.5rem] flex items-center justify-center text-4xl mx-auto shadow-2xl mb-8">
                 <i class="fa-solid fa-school-flag"></i>
             </div>
-            <h1 class="text-3xl font-black italic dark:text-white uppercase mb-2 tracking-tighter">Jejak SMK</h1>
-            <p class="text-[9px] text-slate-400 font-bold tracking-[0.4em] uppercase mb-10">Aplikasi Absensi Maps</p>
+            <h1 class="text-3xl font-black italic dark:text-white uppercase mb-2 tracking-tighter">Aplikasi Absensi SMK</h1>
+            <p class="text-[9px] text-slate-400 font-bold tracking-[0.4em] uppercase mb-10">silahkan login terlebih dahulu</p>
             
             <div class="glass-card p-10 rounded-[3.5rem] shadow-2xl">
-                <div class="space-y-6">
+                <div class="space-y-5">
                     <div>
-                        <label class="text-[10px] font-black text-slate-400 uppercase mb-3 block tracking-widest">Identitas Siswa</label>
-                        <input type="text" id="login-code" placeholder="X-12075" class="w-full p-6 bg-slate-100 dark:bg-slate-900 rounded-3xl outline-none font-black text-center text-xl uppercase dark:text-white border-2 border-transparent focus:border-blue-500 transition-all placeholder:opacity-30">
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-3 block tracking-widest">Username</label>
+                        <input type="text" id="login-username" placeholder="Adinda Devi Aprida" class="w-full p-6 bg-slate-100 dark:bg-slate-900 rounded-3xl outline-none font-black text-center text-lg dark:text-white border-2 border-transparent focus:border-blue-500 transition-all placeholder:opacity-30">
                     </div>
-                    <button onclick="handleLogin()" class="w-full btn-premium py-6 rounded-3xl shadow-xl active:scale-95 transition-all text-sm tracking-widest font-black">Login</button>
+                    <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase mb-3 block tracking-widest">Password</label>
+                        <input type="password" id="login-password" placeholder="Masukkan password" class="w-full p-6 bg-slate-100 dark:bg-slate-900 rounded-3xl outline-none font-black text-center text-xl dark:text-white border-2 border-transparent focus:border-blue-500 transition-all placeholder:opacity-30">
+                    </div>
+                    <div class="rounded-[2rem] bg-blue-50/80 dark:bg-slate-900/70 px-5 py-4 text-left">
+                        <p class="text-[10px] font-black uppercase tracking-widest text-blue-600">Format akun siswa</p>
+                        <p class="mt-2 text-xs font-bold text-slate-500 dark:text-slate-300">Username memakai <span class="font-black text-slate-900 dark:text-white">nama siswa sesuai Excel</span> dan password memakai <span class="font-black text-slate-900 dark:text-white">angka password dari Excel</span>.</p>
+                    </div>
+                    <button onclick="handleLogin()" class="w-full btn-premium py-6 rounded-3xl shadow-xl active:scale-95 transition-all text-sm tracking-widest font-black">Masuk Ke Dashboard</button>
                 </div>
             </div>
         </div>
@@ -278,13 +287,7 @@
         import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global Variables
-        window.STUDENT_DB = {
-            "X-12075": { n: "ADINDA DEVI APRIDA", k: "X TKP 1" },
-            "X-12076": { n: "BAGAS WICAKSONO", k: "X TKP 1" },
-            "X-12698": { n: "NAUFAL RUSYDA", k: "X TKJ 2" }
-        };
-
-        window.currentUser = { role: 'siswa', id: '', name: '', class: '', avatar: 'char-v25-1', bio: 'SMKN 2 SRAGEN' };
+        window.currentUser = { role: 'siswa', id: '', username: '', name: '', class: '', avatar: 'char-live-1', bio: 'SMKN 2 SRAGEN' };
         window.map = null;
         window.myMarker = null;
         window.userPos = null;
@@ -400,30 +403,78 @@
         }
 
         // FUNGSI STANDAR
-        window.handleLogin = function() {
-            const input = document.getElementById('login-code').value.toUpperCase().trim();
-            if(input === 'GURU-SMKN2') {
-                window.currentUser.role = 'guru';
-                window.currentUser.id = 'GURU-01';
-                window.currentUser.name = 'PENGAWAS ADMIN';
-                window.currentUser.class = 'STAF PENGAJAR';
-                startApp(true);
-            } else if(window.STUDENT_DB[input]) {
-                window.currentUser.role = 'siswa';
-                window.currentUser.id = input;
-                window.currentUser.name = window.STUDENT_DB[input].n;
-                window.currentUser.class = window.STUDENT_DB[input].k;
-                startApp(true);
-            } else {
-                const num = parseInt(input.replace('X-', ''));
-                if(num >= 12075 && num <= 12710) {
-                    window.currentUser.role = 'siswa';
-                    window.currentUser.id = input;
-                    window.currentUser.name = "SISWA " + input;
-                    window.currentUser.class = "KELAS X";
-                    startApp(true);
-                } else { alert("ID TIDAK TERDAFTAR!"); }
+        function buildStudentUser(username, record) {
+            return {
+                role: 'siswa',
+                id: record.studentId || username,
+                username: record.username || username,
+                name: record.name,
+                class: record.class || 'PESERTA UTS KELAS X',
+                avatar: record.avatar || 'char-live-1',
+                bio: record.bio || 'PESERTA UTS SMKN 2 SRAGEN'
+            };
+        }
+
+        function normalizeUsername(value) {
+            return (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        }
+
+        function buildAdminUser() {
+            return {
+                role: 'guru',
+                id: 'GURU-01',
+                username: window.ADMIN_ACCOUNT.username,
+                name: window.ADMIN_ACCOUNT.name,
+                class: window.ADMIN_ACCOUNT.class,
+                avatar: window.ADMIN_ACCOUNT.avatar,
+                bio: window.ADMIN_ACCOUNT.bio
+            };
+        }
+
+        function normalizeSavedUser(savedUser) {
+            if(!savedUser) return null;
+            if(savedUser.role === 'guru') return { ...buildAdminUser(), ...savedUser };
+            const directUsername = normalizeUsername(savedUser.username);
+            if(directUsername && window.STUDENT_DB?.[directUsername]) {
+                return { ...buildStudentUser(directUsername, window.STUDENT_DB[directUsername]), ...savedUser, username: window.STUDENT_DB[directUsername].username };
             }
+            const directName = normalizeUsername(savedUser.name);
+            if(directName && window.STUDENT_DB?.[directName]) {
+                return { ...buildStudentUser(directName, window.STUDENT_DB[directName]), ...savedUser, username: window.STUDENT_DB[directName].username };
+            }
+            if(savedUser.id) {
+                const fallbackUsername = `smk${savedUser.id}`.toLowerCase();
+                const byLegacyId = Object.entries(window.STUDENT_DB || {}).find(([, record]) => record.studentId === String(savedUser.id) || `smk${record.studentId}`.toLowerCase() === fallbackUsername);
+                if(byLegacyId) return { ...buildStudentUser(byLegacyId[0], byLegacyId[1]), ...savedUser, username: byLegacyId[1].username };
+            }
+            return savedUser;
+        }
+
+        window.handleLogin = function() {
+            const usernameInput = document.getElementById('login-username');
+            const passwordInput = document.getElementById('login-password');
+            const username = normalizeUsername(usernameInput.value);
+            const password = passwordInput.value.trim();
+
+            if(!username || !password) {
+                showNotification("Username dan password wajib diisi", "error");
+                return;
+            }
+
+            if(window.ADMIN_ACCOUNT && username === normalizeUsername(window.ADMIN_ACCOUNT.username) && password === window.ADMIN_ACCOUNT.password) {
+                window.currentUser = buildAdminUser();
+                startApp(true);
+                return;
+            }
+
+            const student = window.STUDENT_DB?.[username];
+            if(student && student.password === password) {
+                window.currentUser = buildStudentUser(username, student);
+                startApp(true);
+                return;
+            }
+
+            showNotification("Username atau password tidak valid", "error");
         }
 
         function startApp(shouldSave) {
@@ -438,6 +489,10 @@
                 document.getElementById('view-teacher').classList.remove('hidden');
                 const editBtn = document.getElementById('btn-edit-trigger'); if(editBtn) editBtn.classList.add('hidden');
                 document.getElementById('top-role').innerText = 'Dashboard Admin';
+            } else {
+                document.getElementById('view-student').classList.remove('hidden');
+                document.getElementById('view-teacher').classList.add('hidden');
+                document.getElementById('top-role').innerText = `Username: ${window.currentUser.username}`;
             }
 
             generate100Avatars();
@@ -457,13 +512,22 @@
             setTimeout(() => {
                 const savedUser = localStorage.getItem('smkn2_live_session');
                 if(savedUser) {
-                    window.currentUser = JSON.parse(savedUser);
+                    window.currentUser = normalizeSavedUser(JSON.parse(savedUser));
                     startApp(false);
                 } else {
                     document.getElementById('splash-screen').style.display = 'none';
                     document.getElementById('login-screen').classList.remove('hidden');
                 }
             }, 1500);
+
+            ['login-username', 'login-password'].forEach(id => {
+                const input = document.getElementById(id);
+                if(input) {
+                    input.addEventListener('keydown', (event) => {
+                        if(event.key === 'Enter') handleLogin();
+                    });
+                }
+            });
         };
 
         window.logout = function() {
@@ -527,7 +591,10 @@
             if(b) window.currentUser.bio = b;
             localStorage.setItem('smkn2_live_session', JSON.stringify(window.currentUser));
             updateUIVisuals();
-            if(window.userPos) window.shareMyLocation(window.userPos[0], window.userPos[1], true);
+            if(window.userPos && window.map) {
+                const isInside = window.map.distance(window.userPos, [-7.4257, 111.0087]) < 200;
+                window.shareMyLocation(window.userPos[0], window.userPos[1], isInside);
+            }
             window.toggleEditSheet(false);
         }
 
