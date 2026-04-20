@@ -23,6 +23,7 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
       rel="stylesheet"
     />
+    <script src="./student-db.js"></script>
     <script>
       tailwind.config = {
         darkMode: "class",
@@ -320,10 +321,12 @@
       class="hidden min-h-screen flex items-center justify-center p-8 z-[3000] relative bg-slate-50 dark:bg-slate-950"
     >
       <div class="w-full max-w-md text-center">
-        <div
-          class="w-24 h-24 btn-premium rounded-[2.5rem] flex items-center justify-center text-4xl mx-auto shadow-2xl mb-8"
-        >
-          <i class="fa-solid fa-school-flag"></i>
+        <div class="w-28 h-28 mx-auto mb-8">
+          <img
+            src="./school-logo.jpeg"
+            alt="Logo Aplikasi Sekolah"
+            class="w-full h-full object-contain rounded-[2.5rem] shadow-2xl"
+          />
         </div>
         <h1
           class="text-3xl font-black italic dark:text-white uppercase mb-2 tracking-tighter"
@@ -361,27 +364,6 @@
                 placeholder="Masukkan password"
                 class="w-full p-6 bg-slate-100 dark:bg-slate-900 rounded-3xl outline-none font-black text-center text-xl dark:text-white border-2 border-transparent focus:border-blue-500 transition-all placeholder:opacity-30"
               />
-            </div>
-            <div
-              class="rounded-[2rem] bg-blue-50/80 dark:bg-slate-900/70 px-5 py-4 text-left"
-            >
-              <p
-                class="text-[10px] font-black uppercase tracking-widest text-blue-600"
-              >
-                Format akun siswa
-              </p>
-              <p
-                class="mt-2 text-xs font-bold text-slate-500 dark:text-slate-300"
-              >
-                Username memakai
-                <span class="font-black text-slate-900 dark:text-white"
-                  >nama siswa sesuai Excel</span
-                >
-                dan password memakai
-                <span class="font-black text-slate-900 dark:text-white"
-                  >angka password dari Excel</span
-                >.
-              </p>
             </div>
             <button
               onclick="handleLogin()"
@@ -1210,6 +1192,46 @@
         updateAdminFilterSummary();
       }
 
+      function loadStudentCatalogFromLocal() {
+        const students = Object.values(window.STUDENT_DB || {});
+        const jurusan = [...new Set(students.map((student) => student.jurusan).filter(Boolean))].sort();
+        const classesByJurusan = {};
+        jurusan.forEach((jur) => {
+          classesByJurusan[jur] = [...new Set(
+            students
+              .filter((student) => student.jurusan === jur)
+              .map((student) => student.class)
+              .filter(Boolean),
+          )].sort();
+        });
+        window.studentCatalog = { jurusan, classesByJurusan };
+      }
+
+      function tryLocalLogin(username, password) {
+        const adminUsername =
+          typeof window.ADMIN_ACCOUNT !== "undefined"
+            ? normalizeUsername(window.ADMIN_ACCOUNT.username)
+            : "admin";
+        const adminPassword =
+          typeof window.ADMIN_ACCOUNT !== "undefined"
+            ? window.ADMIN_ACCOUNT.password
+            : "smkn2guru";
+
+        if (username === adminUsername && password === adminPassword) {
+          window.currentUser = buildAdminUser();
+          loadStudentCatalogFromLocal();
+          return true;
+        }
+
+        const student = window.STUDENT_DB?.[username];
+        if (student && student.password === password) {
+          window.currentUser = buildStudentUser(username, student);
+          return true;
+        }
+
+        return false;
+      }
+
       async function loadStudentCatalog() {
         try {
           const response = await fetch("./api/catalog.php", {
@@ -1225,7 +1247,8 @@
           renderAdminFilters();
         } catch (error) {
           console.error(error);
-          showNotification("Katalog kelas admin belum bisa dimuat", "error");
+          loadStudentCatalogFromLocal();
+          renderAdminFilters();
         }
       }
 
@@ -1398,7 +1421,12 @@
           startApp(true);
         } catch (error) {
           console.error(error);
-          showNotification("Login gagal. Jalankan lewat server PHP/XAMPP agar bisa diakses dari HP.", "error");
+          if (tryLocalLogin(username, password)) {
+            showNotification("Masuk dengan mode offline lokal", "success");
+            startApp(true);
+            return;
+          }
+          showNotification("Username atau password tidak valid", "error");
         }
       };
 
