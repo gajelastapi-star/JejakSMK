@@ -23,8 +23,6 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
       rel="stylesheet"
     />
-    <script src="./student-db.js"></script>
-
     <script>
       tailwind.config = {
         darkMode: "class",
@@ -895,6 +893,7 @@
       window.isInsideSchool = false;
       window.adminSelectedJurusan = "ALL";
       window.adminSelectedClass = "ALL";
+      window.studentCatalog = { jurusan: [], classesByJurusan: {} };
 
       let db, auth, appId, userSession;
       let pendingPhotoData = "";
@@ -1156,16 +1155,18 @@
       }
 
       function getJurusanList() {
-        return [...new Set(Object.values(window.STUDENT_DB || {}).map((student) => student.jurusan).filter(Boolean))].sort();
+        return window.studentCatalog.jurusan || [];
       }
 
       function getClassListByJurusan(jurusan) {
-        return [...new Set(
-          Object.values(window.STUDENT_DB || {})
-            .filter((student) => jurusan === "ALL" || student.jurusan === jurusan)
-            .map((student) => student.class)
-            .filter(Boolean),
-        )].sort();
+        if (jurusan === "ALL") {
+          return [
+            ...new Set(
+              Object.values(window.studentCatalog.classesByJurusan || {}).flat(),
+            ),
+          ].sort();
+        }
+        return window.studentCatalog.classesByJurusan?.[jurusan] || [];
       }
 
       function renderFilterButtons(containerId, items, activeValue, onClickName) {
@@ -1207,6 +1208,25 @@
           "selectAdminClass",
         );
         updateAdminFilterSummary();
+      }
+
+      async function loadStudentCatalog() {
+        try {
+          const response = await fetch("./api/catalog.php", {
+            headers: { Accept: "application/json" },
+          });
+          if (!response.ok) throw new Error("Gagal mengambil katalog siswa");
+          const result = await response.json();
+          if (!result.success) throw new Error(result.message || "Katalog tidak tersedia");
+          window.studentCatalog = result.catalog || {
+            jurusan: [],
+            classesByJurusan: {},
+          };
+          renderAdminFilters();
+        } catch (error) {
+          console.error(error);
+          showNotification("Katalog kelas admin belum bisa dimuat", "error");
+        }
       }
 
       window.selectAdminJurusan = function (jurusan) {
@@ -1327,62 +1347,25 @@
 
       function normalizeSavedUser(savedUser) {
         if (!savedUser) return null;
-        if (savedUser.role === "guru")
+        if (savedUser.role === "guru") {
           return { ...buildAdminUser(), ...savedUser };
-        const directUsername = normalizeUsername(savedUser.username);
-        if (directUsername && window.STUDENT_DB?.[directUsername]) {
-          const baseUser = buildStudentUser(
-            directUsername,
-            window.STUDENT_DB[directUsername],
-          );
-          return {
-            ...baseUser,
-            name: savedUser.name || baseUser.name,
-            bio: savedUser.bio || baseUser.bio,
-            photo: savedUser.photo || baseUser.photo,
-            lastAttendancePhoto:
-              savedUser.lastAttendancePhoto || baseUser.lastAttendancePhoto,
-            username: window.STUDENT_DB[directUsername].username,
-          };
         }
-        const directName = normalizeUsername(savedUser.name);
-        if (directName && window.STUDENT_DB?.[directName]) {
-          const baseUser = buildStudentUser(directName, window.STUDENT_DB[directName]);
-          return {
-            ...baseUser,
-            name: savedUser.name || baseUser.name,
-            bio: savedUser.bio || baseUser.bio,
-            photo: savedUser.photo || baseUser.photo,
-            lastAttendancePhoto:
-              savedUser.lastAttendancePhoto || baseUser.lastAttendancePhoto,
-            username: window.STUDENT_DB[directName].username,
-          };
-        }
-        if (savedUser.id) {
-          const fallbackUsername = `smk${savedUser.id}`.toLowerCase();
-          const byLegacyId = Object.entries(window.STUDENT_DB || {}).find(
-            ([, record]) =>
-              record.studentId === String(savedUser.id) ||
-              `smk${record.studentId}`.toLowerCase() === fallbackUsername,
-          );
-          if (byLegacyId)
-            {
-            const baseUser = buildStudentUser(byLegacyId[0], byLegacyId[1]);
-            return {
-              ...baseUser,
-              name: savedUser.name || baseUser.name,
-              bio: savedUser.bio || baseUser.bio,
-              photo: savedUser.photo || baseUser.photo,
-              lastAttendancePhoto:
-                savedUser.lastAttendancePhoto || baseUser.lastAttendancePhoto,
-              username: byLegacyId[1].username,
-            };
-          }
-        }
-        return savedUser;
+        return {
+          role: "siswa",
+          id: savedUser.id || "",
+          username: savedUser.username || "",
+          name: savedUser.name || "",
+          class: savedUser.class || "",
+          jurusan: savedUser.jurusan || "",
+          absenNo: savedUser.absenNo || "",
+          avatar: savedUser.avatar || "char-live-1",
+          photo: savedUser.photo || "",
+          lastAttendancePhoto: savedUser.lastAttendancePhoto || "",
+          bio: savedUser.bio || "PESERTA UTS SMKN 2 SRAGEN",
+        };
       }
 
-      window.handleLogin = function () {
+      window.handleLogin = async function () {
         const usernameInput = document.getElementById("login-username");
         const passwordInput = document.getElementById("login-password");
         const username = normalizeUsername(usernameInput.value);
@@ -1393,24 +1376,30 @@
           return;
         }
 
-        if (
-          window.ADMIN_ACCOUNT &&
-          username === normalizeUsername(window.ADMIN_ACCOUNT.username) &&
-          password === window.ADMIN_ACCOUNT.password
-        ) {
-          window.currentUser = buildAdminUser();
-          startApp(true);
-          return;
-        }
+        try {
+          const response = await fetch("./api/login.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ username, password }),
+          });
 
-        const student = window.STUDENT_DB?.[username];
-        if (student && student.password === password) {
-          window.currentUser = buildStudentUser(username, student);
-          startApp(true);
-          return;
-        }
+          const result = await response.json();
+          if (!response.ok || !result.success) {
+            showNotification(result.message || "Username atau password tidak valid", "error");
+            return;
+          }
 
-        showNotification("Username atau password tidak valid", "error");
+          window.currentUser = {
+            ...window.currentUser,
+            ...result.user,
+            photo: result.user.photo || "",
+            lastAttendancePhoto: result.user.lastAttendancePhoto || "",
+          };
+          startApp(true);
+        } catch (error) {
+          console.error(error);
+          showNotification("Login gagal. Jalankan lewat server PHP/XAMPP agar bisa diakses dari HP.", "error");
+        }
       };
 
       function startApp(shouldSave) {
@@ -1547,7 +1536,10 @@
         if (studentPhotoPanel) studentPhotoPanel.classList.toggle("hidden", isAdmin);
         if (adminPhotoPanel) adminPhotoPanel.classList.toggle("hidden", !isAdmin);
         updatePhotoFeatureState();
-        if (isAdmin) renderAdminFilters();
+        if (isAdmin) {
+          if (!window.studentCatalog.jurusan.length) loadStudentCatalog();
+          renderAdminFilters();
+        }
       }
 
       window.switchTab = function (id, el) {
